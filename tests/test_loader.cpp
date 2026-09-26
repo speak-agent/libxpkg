@@ -337,6 +337,30 @@ TEST(LoaderTest, V2_LegacySingleArch_Unchanged) {
     EXPECT_TRUE(r.archs.empty());
     EXPECT_TRUE(r.sha256_by_arch.empty());
     EXPECT_FALSE(r.is_res);
+    EXPECT_EQ(r.revision, 0);
+}
+
+// A version entry may state a packaging revision. An entry that states none
+// has revision 0, and so does an entry whose value is not a non-negative
+// integer. The revision does not change how the rest of the entry is read:
+// a per-arch map with a revision is still a per-arch map.
+TEST(LoaderTest, V2_Revision_ParsedPerVersionEntry) {
+    auto result = load_package(PKGINDEX / "pkgs/v/v2revision.lua");
+    ASSERT_TRUE(result.has_value()) << result.error();
+    auto& plat = result->xpm.entries.at("linux");
+    EXPECT_EQ(plat.at("1.0.0").revision, 0);
+    EXPECT_EQ(plat.at("1.1.0").revision, 2);
+    EXPECT_EQ(plat.at("1.1.0").url, "https://ex/v2revision-1.1.0.tar.gz");
+
+    auto& map = plat.at("1.2.0");
+    EXPECT_EQ(map.revision, 1);
+    ASSERT_EQ(map.archs.size(), 2u);
+    EXPECT_EQ(map.archs.at("x86_64").sha256, "cccc");
+
+    EXPECT_EQ(plat.at("1.3.0").revision, 0);  // a string is not a revision
+    EXPECT_EQ(plat.at("1.4.0").revision, 0);  // nor is a negative number
+    EXPECT_EQ(plat.at("latest").revision, 0); // an alias carries none
+    EXPECT_EQ(plat.at("latest").ref, "1.2.0");
 }
 
 TEST(LoaderTest, SourceDefaultsAreParsedAsMetadataNotVersions) {
